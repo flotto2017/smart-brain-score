@@ -4,52 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบบันทึกคะแนน (Online Ready)</title>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500;700&display=swap" rel="stylesheet">
     <style>
         :root { --primary-color: #2980b9; --bg-color: #f0f4f8; --card-bg: #ffffff; }
-        body { font-family: 'Sarabun', sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 800px; margin: 0 auto; background: var(--card-bg); padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .logo { text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 24px; color: #e67e22; }
-        .section-title { font-size: 18px; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        select, input[type="date"], input[type="number"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fff; }
-        .score-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        body { font-family: 'Sarabun', sans-serif; background-color: var(--bg-color); margin: 0; padding: 10px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: var(--card-bg); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .logo { text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 22px; color: #e67e22; }
+        .section-title { font-size: 16px; font-weight: bold; margin-top: 15px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        select, input[type="date"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fff; }
+        
+        /* Grid สำหรับช่องกรอกคะแนน */
+        .score-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
         @media (max-width: 500px) { .score-grid { grid-template-columns: repeat(2, 1fr); } }
+        
         .score-slot { text-align: center; }
-        .score-slot input { width: 100%; padding: 10px; text-align: center; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        .score-slot input { width: 100%; padding: 8px; text-align: center; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
         .score-slot span { font-size: 12px; color: #888; }
+        
         button { border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: 0.2s; }
-        button.save-btn { width: 100%; padding: 15px; background-color: #27ae60; color: white; font-weight: bold; font-size: 20px; margin-top: 20px; }
+        button.save-btn { width: 100%; padding: 12px; background-color: #27ae60; color: white; font-weight: bold; font-size: 18px; margin-top: 20px; }
         button.save-btn:hover { background-color: #219150; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 13px; }
         th { background-color: #f2f2f2; }
-        .action-btn { padding: 5px 10px; color: white; border-radius: 4px; font-size: 12px; margin: 0 2px; }
+        
+        .action-btn { padding: 4px 8px; color: white; border-radius: 4px; font-size: 12px; margin: 2px; cursor: pointer; }
         .edit-btn { background-color: #f39c12; }
         .del-btn { background-color: #e74c3c; }
-        .chart-box { margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 10px; border: 1px solid #eee; }
+        
+        .chart-box { margin-top: 20px; padding: 10px; background: #fafafa; border-radius: 10px; border: 1px solid #eee; position: relative; height: 350px; }
+        
         #studentSelect { border: 2px solid var(--primary-color); background-color: #eaf2f8; font-weight: bold; }
         
-        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 2000; font-size: 20px; font-weight: bold; color: var(--primary-color); }
+        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 2000; font-size: 18px; font-weight: bold; color: var(--primary-color); flex-direction: column; gap: 10px;}
+        
+        /* Modal Style */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-box { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-box { background: white; padding: 20px; border-radius: 10px; width: 85%; max-width: 350px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 15px; }
         .btn-confirm { flex: 1; background: #2980b9; color: white; padding: 10px; font-weight: bold; }
         .btn-cancel { flex: 1; background: #95a5a6; color: white; padding: 10px; }
     </style>
 </head>
 <body>
 
-<div id="loadingOverlay">⏳ กำลังเชื่อมต่อฐานข้อมูล...</div>
+<div id="loadingOverlay">
+    <div style="font-size:30px;">☁️</div>
+    <div>กำลังเชื่อมต่อฐานข้อมูล...</div>
+</div>
 
 <div class="container">
-    <div class="logo">☁️ Smart Brain Score (ออนไลน์)</div>
+    <div class="logo">☁️ Smart Brain Score (Online)</div>
     
     <div class="section-title">1. ข้อมูลนักเรียนและวันที่</div>
     <div class="input-group">
@@ -84,7 +99,7 @@
     <button id="saveBtn" class="save-btn" onclick="saveAllScoresToCloud()">💾 บันทึกขึ้น Cloud</button>
 
     <div class="chart-box">
-        <canvas id="progressChart" height="300"></canvas>
+        <canvas id="progressChart"></canvas>
     </div>
 
     <div class="section-title">3. ประวัติการฝึกซ้อม</div>
@@ -103,6 +118,7 @@
     </div>
 </div>
 
+<!-- Modal แก้ไขข้อมูล -->
 <div id="editModal" class="modal-overlay">
     <div class="modal-box">
         <h3 style="margin-top:0;">✏️ แก้ไขข้อมูล (Cloud)</h3>
@@ -117,7 +133,7 @@
 
 <script>
     // =======================================================
-    // 🔑 ตั้งค่า Firebase (ใส่ให้แล้ว)
+    // 🔑 ตั้งค่า Firebase
     // =======================================================
     const firebaseConfig = {
       apiKey: "AIzaSyDgs3yQ3CNuH6szyVAJj-IxOk5exJC5Nd8",
@@ -129,7 +145,6 @@
       measurementId: "G-X875NZSTYP"
     };
 
-    // เชื่อมต่อ Firebase
     try {
         firebase.initializeApp(firebaseConfig);
         var db = firebase.firestore();
@@ -139,7 +154,7 @@
     }
 
     // =======================================================
-    // 🟢 ข้อมูลและกฎ
+    // 🟢 ข้อมูล Config
     // =======================================================
     const EXAM_CONFIG = {
         'ระดับ 1Std.': 100, 'ระดับ 1Adv.': 120, 'ระดับ 2': 120, 'ระดับ 3': 120,
@@ -188,7 +203,7 @@
     function initApp() {
         document.getElementById('practiceDate').valueAsDate = new Date();
         const select = document.getElementById('studentSelect');
-        select.innerHTML = '<option value="">-- เลือกชื่อ --</option>';
+        select.innerHTML = '<option value="">-- เลือกชื่อนักเรียน --</option>';
         
         STUDENTS.sort((a, b) => a.name.localeCompare(b.name));
         STUDENTS.forEach(s => {
@@ -198,10 +213,7 @@
             select.appendChild(opt);
         });
 
-        // Event Listener
         select.addEventListener('change', loadStudentDataFromCloud);
-        
-        // ซ่อน Loading
         document.getElementById('loadingOverlay').style.display = 'none';
     }
 
@@ -224,7 +236,6 @@
         
         document.getElementById('loadingOverlay').style.display = 'flex';
 
-        // Query Firestore
         db.collection("scores").where("name", "==", name).get()
         .then((querySnapshot) => {
             currentHistory = [];
@@ -252,12 +263,11 @@
 
         if (!name || !rawDate) { alert("กรุณาเลือกชื่อและวันที่"); return; }
         const maxScore = EXAM_CONFIG[level] || 100;
-        let batch = db.batch(); // ใช้ Batch เพื่อความเร็ว
+        let batch = db.batch();
         let countSaved = 0;
         
         const inputs = document.querySelectorAll('.score-input');
         
-        // เช็คความถูกต้อง
         for(let input of inputs) {
             let val = parseFloat(input.value);
             if (!isNaN(val) && val > maxScore) {
@@ -289,7 +299,7 @@
                 document.getElementById('loadingOverlay').style.display = 'none';
             });
         } else {
-            alert("กรุณากรอกคะแนน");
+            alert("กรุณากรอกคะแนนอย่างน้อย 1 ช่อง");
             document.getElementById('loadingOverlay').style.display = 'none';
         }
     }
@@ -340,7 +350,11 @@
         }
     }
 
-    // Chart Plugins
+    // =======================================================
+    // 🎨 CHART PLUGINS (แก้ไขให้รองรับมือถือ)
+    // =======================================================
+    
+    // Plugin 1: เส้นเป้าหมาย (Target Lines)
     const targetLinesPlugin = {
         id: 'targetLines',
         beforeDraw: (chart) => {
@@ -349,19 +363,34 @@
             if (targets) {
                 const y1 = y.getPixelForValue(targets.rank1);
                 const y5 = y.getPixelForValue(targets.rank5);
+                
+                // พื้นที่สีเขียวจางๆ
                 ctx.save();
-                ctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; ctx.fillRect(left, y1, right - left, y5 - y1);
-                ctx.beginPath(); ctx.lineWidth = 2; ctx.strokeStyle = '#d35400'; ctx.setLineDash([5, 5]);
+                ctx.fillStyle = 'rgba(46, 204, 113, 0.1)'; 
+                ctx.fillRect(left, y1, right - left, y5 - y1);
+                
+                // เส้นประสีส้ม (ที่ 1)
+                ctx.beginPath(); ctx.lineWidth = 1; ctx.strokeStyle = '#d35400'; ctx.setLineDash([5, 5]);
                 ctx.moveTo(left, y1); ctx.lineTo(right, y1); ctx.stroke();
-                ctx.fillStyle = '#d35400'; ctx.textAlign = 'left'; ctx.font = 'bold 12px Sarabun';
-                ctx.fillText(`🏆 ที่ 1 ปี 68 (${targets.rank1})`, left + 5, y1 - 5);
-                ctx.beginPath(); ctx.strokeStyle = '#27ae60'; ctx.moveTo(left, y5); ctx.lineTo(right, y5); ctx.stroke();
-                ctx.fillStyle = '#27ae60'; ctx.fillText(`🎯 ที่ 5 ปี 68 (${targets.rank5})`, left + 5, y5 + 15);
+                
+                // เส้นทึบสีเขียว (ที่ 5)
+                ctx.beginPath(); ctx.lineWidth = 1; ctx.strokeStyle = '#27ae60'; ctx.setLineDash([]);
+                ctx.moveTo(left, y5); ctx.lineTo(right, y5); ctx.stroke();
+
+                // ข้อความกำกับ (ซ่อนในมือถือถ้าจอเล็กเกินไป)
+                if (chart.width > 300) {
+                    ctx.fillStyle = '#d35400'; ctx.textAlign = 'left'; ctx.font = 'bold 10px Sarabun';
+                    ctx.fillText(`🏆 ที่ 1: ${targets.rank1}`, left + 5, y1 - 5);
+                    
+                    ctx.fillStyle = '#27ae60';
+                    ctx.fillText(`🎯 ที่ 5: ${targets.rank5}`, left + 5, y5 + 12);
+                }
                 ctx.restore();
             }
         }
     };
 
+    // Plugin 2: สีพื้นหลังตามเกณฑ์ (Background Zones)
     const backgroundZonesPlugin = {
         id: 'backgroundZones',
         beforeDraw: (chart) => {
@@ -370,27 +399,60 @@
             const yGold = y.getPixelForValue(maxScore * 0.71);
             const ySilver = y.getPixelForValue(maxScore * 0.51);
             const yBronze = y.getPixelForValue(maxScore * 0.21);
-            ctx.fillStyle = 'rgba(241, 196, 15, 0.05)'; ctx.fillRect(left, top, right - left, yGold - top);
-            ctx.fillStyle = 'rgba(149, 165, 166, 0.05)'; ctx.fillRect(left, yGold, right - left, ySilver - yGold);
-            ctx.fillStyle = 'rgba(211, 84, 0, 0.05)'; ctx.fillRect(left, ySilver, right - left, yBronze - ySilver);
-            ctx.fillStyle = 'rgba(142, 68, 173, 0.05)'; ctx.fillRect(left, yBronze, right - left, bottom - yBronze);
+            
+            ctx.save();
+            ctx.fillStyle = 'rgba(241, 196, 15, 0.03)'; ctx.fillRect(left, top, right - left, yGold - top);
+            ctx.fillStyle = 'rgba(149, 165, 166, 0.03)'; ctx.fillRect(left, yGold, right - left, ySilver - yGold);
+            ctx.fillStyle = 'rgba(211, 84, 0, 0.03)'; ctx.fillRect(left, ySilver, right - left, yBronze - ySilver);
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.03)'; ctx.fillRect(left, yBronze, right - left, bottom - yBronze);
+            ctx.restore();
         }
     };
 
+    // Plugin 3: อีโมจิและคะแนน (Medal Emojis) - ปรับปรุงใหม่!
     const medalEmojiPlugin = {
         id: 'medalEmojis',
         afterDatasetsDraw: (chart) => {
-            const { ctx } = chart;
+            const { ctx, chartArea: { width } } = chart;
             const maxScore = chart.config.options.plugins.customMaxScore || 100;
+            
+            // 📱 ตรวจสอบว่าเป็นมือถือหรือไม่
+            const isSmallScreen = width < 500;
+            
+            // 📏 ปรับขนาดตามหน้าจอ
+            const emojiSize = isSmallScreen ? '18px' : '30px'; 
+            const fontSize = isSmallScreen ? '12px' : '16px'; 
+            const emojiOffset = isSmallScreen ? 15 : 25;
+            const textOffset = isSmallScreen ? 30 : 50;
+
             chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
                 const score = chart.data.datasets[0].data[index];
                 const percent = (score / maxScore) * 100;
                 let emoji = "🎖️";
                 if (percent >= 71) emoji = "🥇"; else if (percent >= 51) emoji = "🥈"; else if (percent >= 21) emoji = "🥉";
-                const x = datapoint.x; const y = datapoint.y;
-                ctx.font = '35px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emoji, x, y - 10); 
-                ctx.font = 'bold 18px Sarabun'; ctx.fillStyle = '#2c3e50'; ctx.lineWidth = 4; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
-                ctx.strokeText(score, x, y - 45); ctx.fillText(score, x, y - 45); 
+                
+                const x = datapoint.x; 
+                const y = datapoint.y;
+                
+                ctx.save();
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                
+                // วาด Emoji
+                ctx.font = `${emojiSize} Arial`; 
+                ctx.fillText(emoji, x, y - emojiOffset); 
+                
+                // วาดคะแนน (ใส่ขอบขาวให้อ่านง่ายขึ้น)
+                ctx.font = `bold ${fontSize} Sarabun`; 
+                ctx.fillStyle = '#2c3e50'; 
+                ctx.lineWidth = 3; 
+                ctx.strokeStyle = '#ffffff'; 
+                ctx.lineJoin = 'round';
+                
+                ctx.strokeText(score, x, y - textOffset); 
+                ctx.fillText(score, x, y - textOffset); 
+                
+                ctx.restore();
             });
         }
     };
@@ -406,6 +468,10 @@
         const currentMaxScore = EXAM_CONFIG[level] || 100;
         const targets = TARGET_SCORES[level];
 
+        // 📱 คำนวณ Padding ด้านบนอัตโนมัติ (มือถือเว้นน้อยกว่า PC)
+        const isMobile = window.innerWidth < 600;
+        const topPadding = isMobile ? 30 : 50;
+
         const ctx = document.getElementById('progressChart').getContext('2d');
         if(myChart) myChart.destroy();
 
@@ -416,21 +482,39 @@
                 datasets: [{
                     label: `คะแนน`,
                     data: currentHistory.map(d => d.score),
-                    borderColor: '#2c3e50', borderWidth: 2, pointRadius: 0, pointHitRadius: 20, tension: 0.3, fill: false
+                    borderColor: '#2980b9', borderWidth: 2, 
+                    pointRadius: 4, pointBackgroundColor: '#fff', pointBorderColor: '#2980b9',
+                    tension: 0.3, fill: false
                 }]
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
-                layout: { padding: { top: 30 } },
-                scales: { y: { beginAtZero: true, max: currentMaxScore * 1.2 } },
+                layout: { padding: { top: topPadding, right: 10, left: 0, bottom: 0 } },
+                scales: { 
+                    y: { 
+                        beginAtZero: true, 
+                        max: currentMaxScore * 1.15, // เผื่อที่ด้านบนนิดหน่อย
+                        grid: { borderDash: [2, 2] }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                },
                 plugins: {
-                    tooltip: { callbacks: { title: (ctx) => `วันที่ ${currentHistory[ctx[0].dataIndex].displayDate}`, label: (ctx) => `คะแนน: ${ctx.raw} (เต็ม ${currentMaxScore})` } },
+                    legend: { display: false },
+                    tooltip: { 
+                        callbacks: { 
+                            title: (ctx) => `ครั้งที่ ${ctx[0].label} (${currentHistory[ctx[0].dataIndex].displayDate})`, 
+                            label: (ctx) => `ทำได้: ${ctx.raw} / ${currentMaxScore} คะแนน` 
+                        } 
+                    },
                     customMaxScore: currentMaxScore, targets: targets 
                 }
             },
             plugins: [backgroundZonesPlugin, targetLinesPlugin, medalEmojiPlugin]
         });
 
+        // อัปเดตตาราง
         const tbody = document.querySelector('#historyTable tbody');
         tbody.innerHTML = "";
         [...currentHistory].reverse().slice(0, 30).forEach(item => {
@@ -439,7 +523,15 @@
             if(percent >= MEDAL_CRITERIA.gold) { medal = "🥇 ทอง"; color = "#f1c40f"; }
             else if(percent >= MEDAL_CRITERIA.silver) { medal = "🥈 เงิน"; color = "#95a5a6"; }
             else if(percent >= MEDAL_CRITERIA.bronze) { medal = "🥉 ทองแดง"; color = "#d35400"; }
-            tbody.innerHTML += `<tr><td>${item.displayDate}</td><td style="font-weight:bold;font-size:16px;">${item.score}</td><td style="color:${color};font-weight:bold;">${medal}</td><td><button class="action-btn edit-btn" onclick="openEditModal('${item.id}')">แก้ไข</button><button class="action-btn del-btn" onclick="deleteItem('${item.id}')">ลบ</button></td></tr>`;
+            tbody.innerHTML += `<tr>
+                <td>${item.displayDate}</td>
+                <td style="font-weight:bold;font-size:16px;">${item.score}</td>
+                <td style="color:${color};font-weight:bold;">${medal}</td>
+                <td>
+                    <button class="action-btn edit-btn" onclick="openEditModal('${item.id}')">แก้ไข</button>
+                    <button class="action-btn del-btn" onclick="deleteItem('${item.id}')">ลบ</button>
+                </td>
+            </tr>`;
         });
     }
 </script>
