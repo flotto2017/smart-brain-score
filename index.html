@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบันทึกคะแนน (Online Ready)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary-color: #2980b9; --bg-color: #f0f4f8; --card-bg: #ffffff; }
+        body { font-family: 'Sarabun', sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: var(--card-bg); padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .logo { text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 24px; color: #e67e22; }
+        .section-title { font-size: 18px; font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        select, input[type="date"], input[type="number"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: #fff; }
+        .score-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        @media (max-width: 500px) { .score-grid { grid-template-columns: repeat(2, 1fr); } }
+        .score-slot { text-align: center; }
+        .score-slot input { width: 100%; padding: 10px; text-align: center; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+        .score-slot span { font-size: 12px; color: #888; }
+        button { border: none; border-radius: 8px; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        button.save-btn { width: 100%; padding: 15px; background-color: #27ae60; color: white; font-weight: bold; font-size: 20px; margin-top: 20px; }
+        button.save-btn:hover { background-color: #219150; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 14px; }
+        th { background-color: #f2f2f2; }
+        .action-btn { padding: 5px 10px; color: white; border-radius: 4px; font-size: 12px; margin: 0 2px; }
+        .edit-btn { background-color: #f39c12; }
+        .del-btn { background-color: #e74c3c; }
+        .chart-box { margin-top: 30px; padding: 20px; background: #fafafa; border-radius: 10px; border: 1px solid #eee; }
+        #studentSelect { border: 2px solid var(--primary-color); background-color: #eaf2f8; font-weight: bold; }
+        
+        #loadingOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: none; justify-content: center; align-items: center; z-index: 2000; font-size: 20px; font-weight: bold; color: var(--primary-color); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-box { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-confirm { flex: 1; background: #2980b9; color: white; padding: 10px; font-weight: bold; }
+        .btn-cancel { flex: 1; background: #95a5a6; color: white; padding: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay">⏳ กำลังเชื่อมต่อฐานข้อมูล...</div>
+
+<div class="container">
+    <div class="logo">☁️ Smart Brain Score (ออนไลน์)</div>
+    
+    <div class="section-title">1. ข้อมูลนักเรียนและวันที่</div>
+    <div class="input-group">
+        <label>👤 เลือกชื่อนักเรียน (Cloud)</label>
+        <select id="studentSelect">
+            <option value="">-- กำลังโหลดรายชื่อ... --</option>
+        </select>
+    </div>
+    <div class="input-group">
+        <label>📅 วันที่ฝึกซ้อม</label>
+        <input type="date" id="practiceDate">
+    </div>
+    <div style="font-size: 14px; color: #666; margin-bottom:10px;">
+        ระดับ: <span id="currentLevel" style="font-weight:bold; color:var(--primary-color)">-</span> 
+        (คะแนนเต็ม: <span id="maxScoreDisplay">-</span>)
+    </div>
+
+    <div class="section-title">2. กรอกคะแนน</div>
+    <div class="score-grid">
+        <div class="score-slot"><span>แผ่น 1</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 2</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 3</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 4</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 5</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 6</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 7</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 8</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 9</span><input type="number" class="score-input"></div>
+        <div class="score-slot"><span>แผ่น 10</span><input type="number" class="score-input"></div>
+    </div>
+
+    <button id="saveBtn" class="save-btn" onclick="saveAllScoresToCloud()">💾 บันทึกขึ้น Cloud</button>
+
+    <div class="chart-box">
+        <canvas id="progressChart" height="300"></canvas>
+    </div>
+
+    <div class="section-title">3. ประวัติการฝึกซ้อม</div>
+    <div style="overflow-x: auto;">
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>วันที่</th>
+                    <th>คะแนน</th>
+                    <th>ผลประเมิน</th>
+                    <th>จัดการ</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+        <h3 style="margin-top:0;">✏️ แก้ไขข้อมูล (Cloud)</h3>
+        <div class="input-group"><label>วันที่:</label><input type="date" id="editDateInput"></div>
+        <div class="input-group"><label>คะแนน:</label><input type="number" id="editScoreInput"></div>
+        <div class="modal-buttons">
+            <button class="btn-cancel" onclick="document.getElementById('editModal').style.display = 'none'">ยกเลิก</button>
+            <button class="btn-confirm" onclick="saveEditToCloud()">บันทึก</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // =======================================================
+    // 🔑 ตั้งค่า Firebase (ใส่ให้แล้ว)
+    // =======================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDgs3yQ3CNuH6szyVAJj-IxOk5exJC5Nd8",
+      authDomain: "smart-brain-score.firebaseapp.com",
+      projectId: "smart-brain-score",
+      storageBucket: "smart-brain-score.firebasestorage.app",
+      messagingSenderId: "32859759244",
+      appId: "1:32859759244:web:446aef63eb76493d0851a9",
+      measurementId: "G-X875NZSTYP"
+    };
+
+    // เชื่อมต่อ Firebase
+    try {
+        firebase.initializeApp(firebaseConfig);
+        var db = firebase.firestore();
+        console.log("Firebase Connected!");
+    } catch (e) {
+        alert("การเชื่อมต่อ Firebase ผิดพลาด: " + e.message);
+    }
+
+    // =======================================================
+    // 🟢 ข้อมูลและกฎ
+    // =======================================================
+    const EXAM_CONFIG = {
+        'ระดับ 1Std.': 100, 'ระดับ 1Adv.': 120, 'ระดับ 2': 120, 'ระดับ 3': 120,
+        'ระดับ 4': 160, 'ระดับ 5': 160, 'ระดับ 6': 160, 'ระดับ Open': 100, 'ระดับ Std.': 100
+    };
+
+    const TARGET_SCORES = {
+        'ระดับ 1Std.': { rank1: 90, rank5: 65 }, 'ระดับ 1Adv.': { rank1: 90, rank5: 65 },
+        'ระดับ 2': { rank1: 97, rank5: 78 }, 'ระดับ 3': { rank1: 115, rank5: 80 },
+        'ระดับ 4': { rank1: 148, rank5: 139 }, 'ระดับ 5': { rank1: 128, rank5: 114 },
+        'ระดับ 6': { rank1: 113, rank5: 64 }, 'ระดับ Open': { rank1: 54, rank5: 43 },
+        'ระดับ Std.': { rank1: 90, rank5: 65 }
+    };
+
+    const STUDENTS = [
+        { name: "ด.ญ.จรรยมณฑน์ สุระถิตย์", level: "ระดับ 1Adv." },
+        { name: "ด.ช.ภัทรบดินทร์ เหมนิล", level: "ระดับ 2" },
+        { name: "ด.ญ.ทรัพย์พูน วีระบุรุษ", level: "ระดับ 2" },
+        { name: "ด.ช.อภิวุฒิ เทียบสี", level: "ระดับ 3" },
+        { name: "ด.ญ.วรกัญญา ชำนิยันต์", level: "ระดับ 5" },
+        { name: "ด.ญ.วรรณวิสา โคตรชุม", level: "ระดับ 6" },
+        { name: "ด.ญ.นวลกนก สารีวงษ์", level: "ระดับ 6" },
+        { name: "ด.ญ.อริย์กันตา ฉัตรพรธนโชติ", level: "ระดับ 1Std." },
+        { name: "ด.ญ.กฤษวรรณ สุวรรณเรือง", level: "ระดับ Std." },
+        { name: "ด.ญ.ปวริศษา หนูทับ", level: "ระดับ Std." },
+        { name: "ด.ช.นิติธร ดาบุตร", level: "ระดับ Std." },
+        { name: "ด.ญ.ภัทราพร โคตรชุม", level: "ระดับ 1Adv." },
+        { name: "ด.ช.รัชตะ โคตรแสนลี", level: "ระดับ 3" },
+        { name: "ด.ช.จิรัสนณภัทร ตองแตม", level: "ระดับ 4" },
+        { name: "ด.ญ.ศรีสุดา คลังชำนาญ", level: "ระดับ 6" },
+        { name: "ด.ช.สิรวิชญ์ กลิ่นฟัก", level: "ระดับ Open" },
+        { name: "ด.ช.จักรภัทร์ ต้องแต้ม", level: "ระดับ Open" },
+        { name: "ด.ญ.มีรินดา อนุกูลประเสริฐ", level: "ระดับ Std." },
+        { name: "ด.ช.ธณัณณพัชร์ ปวีณวัจน์", level: "ระดับ Std." }
+    ];
+    
+    const MEDAL_CRITERIA = { gold: 71, silver: 51, bronze: 21 };
+
+    let myChart = null;
+    let currentHistory = [];
+    let currentEditId = null;
+
+    // เริ่มทำงาน
+    initApp();
+
+    function initApp() {
+        document.getElementById('practiceDate').valueAsDate = new Date();
+        const select = document.getElementById('studentSelect');
+        select.innerHTML = '<option value="">-- เลือกชื่อ --</option>';
+        
+        STUDENTS.sort((a, b) => a.name.localeCompare(b.name));
+        STUDENTS.forEach(s => {
+            let opt = document.createElement("option");
+            opt.value = s.name; opt.text = s.name;
+            opt.setAttribute('data-level', s.level);
+            select.appendChild(opt);
+        });
+
+        // Event Listener
+        select.addEventListener('change', loadStudentDataFromCloud);
+        
+        // ซ่อน Loading
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function loadStudentDataFromCloud() {
+        const select = document.getElementById('studentSelect');
+        const name = select.value;
+        const level = select.options[select.selectedIndex]?.getAttribute('data-level');
+
+        if (!name) {
+            document.getElementById('currentLevel').innerText = "-";
+            document.getElementById('maxScoreDisplay').innerText = "-";
+            currentHistory = [];
+            updateChartAndTable();
+            return;
+        }
+
+        const maxScore = EXAM_CONFIG[level] || 100;
+        document.getElementById('currentLevel').innerText = level;
+        document.getElementById('maxScoreDisplay').innerText = maxScore;
+        
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        // Query Firestore
+        db.collection("scores").where("name", "==", name).get()
+        .then((querySnapshot) => {
+            currentHistory = [];
+            querySnapshot.forEach((doc) => {
+                let data = doc.data();
+                data.id = doc.id;
+                currentHistory.push(data);
+            });
+            updateChartAndTable();
+            document.getElementById('loadingOverlay').style.display = 'none';
+        })
+        .catch((error) => {
+            console.error("Error:", error);
+            alert("โหลดข้อมูลไม่สำเร็จ: " + error.message);
+            document.getElementById('loadingOverlay').style.display = 'none';
+        });
+    }
+
+    function saveAllScoresToCloud() {
+        const select = document.getElementById('studentSelect');
+        const name = select.value;
+        const level = select.options[select.selectedIndex]?.getAttribute('data-level');
+        const rawDate = document.getElementById('practiceDate').value; 
+        const dateStr = new Date(rawDate).toLocaleDateString('th-TH');
+
+        if (!name || !rawDate) { alert("กรุณาเลือกชื่อและวันที่"); return; }
+        const maxScore = EXAM_CONFIG[level] || 100;
+        let batch = db.batch(); // ใช้ Batch เพื่อความเร็ว
+        let countSaved = 0;
+        
+        const inputs = document.querySelectorAll('.score-input');
+        
+        // เช็คความถูกต้อง
+        for(let input of inputs) {
+            let val = parseFloat(input.value);
+            if (!isNaN(val) && val > maxScore) {
+                alert(`มีคะแนนเกินเต็ม (${maxScore})`); return;
+            }
+        }
+
+        document.getElementById('loadingOverlay').style.display = 'flex';
+
+        inputs.forEach((input) => {
+            let val = parseFloat(input.value);
+            if (!isNaN(val)) {
+                let ref = db.collection("scores").doc();
+                batch.set(ref, {
+                    name: name, level: level, score: val, maxScore: maxScore,
+                    displayDate: dateStr, rawDate: rawDate, timestamp: Date.now()
+                });
+                countSaved++;
+                input.value = "";
+            }
+        });
+
+        if (countSaved > 0) {
+            batch.commit().then(() => {
+                alert(`✅ บันทึกสำเร็จ ${countSaved} รายการ`);
+                loadStudentDataFromCloud();
+            }).catch((e) => {
+                alert("บันทึกผิดพลาด: " + e.message);
+                document.getElementById('loadingOverlay').style.display = 'none';
+            });
+        } else {
+            alert("กรุณากรอกคะแนน");
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    }
+
+    function saveEditToCloud() {
+        if(!currentEditId) return;
+        let newScore = parseFloat(document.getElementById('editScoreInput').value);
+        let newDate = document.getElementById('editDateInput').value;
+        
+        let item = currentHistory.find(d => d.id === currentEditId);
+        if(item && !isNaN(newScore) && newDate) {
+            if(newScore > item.maxScore) { alert("คะแนนเกินเต็ม"); return; }
+            
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            db.collection("scores").doc(currentEditId).update({
+                score: newScore,
+                rawDate: newDate,
+                displayDate: new Date(newDate).toLocaleDateString('th-TH')
+            }).then(() => {
+                document.getElementById('editModal').style.display = 'none';
+                loadStudentDataFromCloud();
+            }).catch((e) => {
+                alert("แก้ไขผิดพลาด: " + e.message);
+                document.getElementById('loadingOverlay').style.display = 'none';
+            });
+        }
+    }
+
+    window.openEditModal = function(id) {
+        let item = currentHistory.find(d => d.id === id);
+        if(item) {
+            currentEditId = id;
+            document.getElementById('editDateInput').value = item.rawDate;
+            document.getElementById('editScoreInput').value = item.score;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+    }
+
+    window.deleteItem = function(id) {
+        if(confirm("ยืนยันลบข้อมูลนี้?")) {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            db.collection("scores").doc(id).delete().then(() => {
+                loadStudentDataFromCloud();
+            }).catch((e) => {
+                alert("ลบผิดพลาด: " + e.message);
+                document.getElementById('loadingOverlay').style.display = 'none';
+            });
+        }
+    }
+
+    // Chart Plugins
+    const targetLinesPlugin = {
+        id: 'targetLines',
+        beforeDraw: (chart) => {
+            const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+            const targets = chart.config.options.plugins.targets;
+            if (targets) {
+                const y1 = y.getPixelForValue(targets.rank1);
+                const y5 = y.getPixelForValue(targets.rank5);
+                ctx.save();
+                ctx.fillStyle = 'rgba(46, 204, 113, 0.15)'; ctx.fillRect(left, y1, right - left, y5 - y1);
+                ctx.beginPath(); ctx.lineWidth = 2; ctx.strokeStyle = '#d35400'; ctx.setLineDash([5, 5]);
+                ctx.moveTo(left, y1); ctx.lineTo(right, y1); ctx.stroke();
+                ctx.fillStyle = '#d35400'; ctx.textAlign = 'left'; ctx.font = 'bold 12px Sarabun';
+                ctx.fillText(`🏆 ที่ 1 ปี 68 (${targets.rank1})`, left + 5, y1 - 5);
+                ctx.beginPath(); ctx.strokeStyle = '#27ae60'; ctx.moveTo(left, y5); ctx.lineTo(right, y5); ctx.stroke();
+                ctx.fillStyle = '#27ae60'; ctx.fillText(`🎯 ที่ 5 ปี 68 (${targets.rank5})`, left + 5, y5 + 15);
+                ctx.restore();
+            }
+        }
+    };
+
+    const backgroundZonesPlugin = {
+        id: 'backgroundZones',
+        beforeDraw: (chart) => {
+            const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+            const maxScore = chart.config.options.plugins.customMaxScore || 100;
+            const yGold = y.getPixelForValue(maxScore * 0.71);
+            const ySilver = y.getPixelForValue(maxScore * 0.51);
+            const yBronze = y.getPixelForValue(maxScore * 0.21);
+            ctx.fillStyle = 'rgba(241, 196, 15, 0.05)'; ctx.fillRect(left, top, right - left, yGold - top);
+            ctx.fillStyle = 'rgba(149, 165, 166, 0.05)'; ctx.fillRect(left, yGold, right - left, ySilver - yGold);
+            ctx.fillStyle = 'rgba(211, 84, 0, 0.05)'; ctx.fillRect(left, ySilver, right - left, yBronze - ySilver);
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.05)'; ctx.fillRect(left, yBronze, right - left, bottom - yBronze);
+        }
+    };
+
+    const medalEmojiPlugin = {
+        id: 'medalEmojis',
+        afterDatasetsDraw: (chart) => {
+            const { ctx } = chart;
+            const maxScore = chart.config.options.plugins.customMaxScore || 100;
+            chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
+                const score = chart.data.datasets[0].data[index];
+                const percent = (score / maxScore) * 100;
+                let emoji = "🎖️";
+                if (percent >= 71) emoji = "🥇"; else if (percent >= 51) emoji = "🥈"; else if (percent >= 21) emoji = "🥉";
+                const x = datapoint.x; const y = datapoint.y;
+                ctx.font = '35px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emoji, x, y - 10); 
+                ctx.font = 'bold 18px Sarabun'; ctx.fillStyle = '#2c3e50'; ctx.lineWidth = 4; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
+                ctx.strokeText(score, x, y - 45); ctx.fillText(score, x, y - 45); 
+            });
+        }
+    };
+
+    function updateChartAndTable() {
+        currentHistory.sort((a, b) => { 
+            if (a.rawDate !== b.rawDate) return a.rawDate.localeCompare(b.rawDate); 
+            return a.timestamp - b.timestamp; 
+        });
+
+        const select = document.getElementById('studentSelect');
+        const level = select.options[select.selectedIndex]?.getAttribute('data-level') || 'ระดับ 1Std.';
+        const currentMaxScore = EXAM_CONFIG[level] || 100;
+        const targets = TARGET_SCORES[level];
+
+        const ctx = document.getElementById('progressChart').getContext('2d');
+        if(myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: currentHistory.map((d, i) => i+1),
+                datasets: [{
+                    label: `คะแนน`,
+                    data: currentHistory.map(d => d.score),
+                    borderColor: '#2c3e50', borderWidth: 2, pointRadius: 0, pointHitRadius: 20, tension: 0.3, fill: false
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                layout: { padding: { top: 30 } },
+                scales: { y: { beginAtZero: true, max: currentMaxScore * 1.2 } },
+                plugins: {
+                    tooltip: { callbacks: { title: (ctx) => `วันที่ ${currentHistory[ctx[0].dataIndex].displayDate}`, label: (ctx) => `คะแนน: ${ctx.raw} (เต็ม ${currentMaxScore})` } },
+                    customMaxScore: currentMaxScore, targets: targets 
+                }
+            },
+            plugins: [backgroundZonesPlugin, targetLinesPlugin, medalEmojiPlugin]
+        });
+
+        const tbody = document.querySelector('#historyTable tbody');
+        tbody.innerHTML = "";
+        [...currentHistory].reverse().slice(0, 30).forEach(item => {
+            const percent = (item.score / item.maxScore) * 100;
+            let medal = "🎖️ ชมเชย", color = "#8e44ad";
+            if(percent >= MEDAL_CRITERIA.gold) { medal = "🥇 ทอง"; color = "#f1c40f"; }
+            else if(percent >= MEDAL_CRITERIA.silver) { medal = "🥈 เงิน"; color = "#95a5a6"; }
+            else if(percent >= MEDAL_CRITERIA.bronze) { medal = "🥉 ทองแดง"; color = "#d35400"; }
+            tbody.innerHTML += `<tr><td>${item.displayDate}</td><td style="font-weight:bold;font-size:16px;">${item.score}</td><td style="color:${color};font-weight:bold;">${medal}</td><td><button class="action-btn edit-btn" onclick="openEditModal('${item.id}')">แก้ไข</button><button class="action-btn del-btn" onclick="deleteItem('${item.id}')">ลบ</button></td></tr>`;
+        });
+    }
+</script>
+
+</body>
+</html>
