@@ -351,7 +351,7 @@
     }
 
     // =======================================================
-    // 🎨 CHART PLUGINS (แก้ไขให้รองรับมือถือ)
+    // 🎨 CHART PLUGINS
     // =======================================================
     
     // Plugin 1: เส้นเป้าหมาย (Target Lines)
@@ -380,80 +380,65 @@
                 // ข้อความกำกับ (ซ่อนในมือถือถ้าจอเล็กเกินไป)
                 if (chart.width > 300) {
                     ctx.fillStyle = '#d35400'; ctx.textAlign = 'left'; ctx.font = 'bold 10px Sarabun';
-                    ctx.fillText(`🏆 ที่ 1: ${targets.rank1}`, left + 5, y1 - 5);
+                    ctx.fillText(`🏆 ที่ 1: ${targets.rank1} (ปี68)`, left + 5, y1 - 5);
                     
                     ctx.fillStyle = '#27ae60';
-                    ctx.fillText(`🎯 ที่ 5: ${targets.rank5}`, left + 5, y5 + 12);
+                    ctx.fillText(`🎯 ที่ 5: ${targets.rank5} (ปี68)`, left + 5, y5 + 12);
                 }
                 ctx.restore();
             }
         }
     };
 
-    // Plugin 2: สีพื้นหลังตามเกณฑ์ (Background Zones)
+    // Plugin 2: สีพื้นหลังตามเกณฑ์ + ข้อความระดับคะแนน (Background Zones & Labels)
     const backgroundZonesPlugin = {
         id: 'backgroundZones',
         beforeDraw: (chart) => {
             const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
             const maxScore = chart.config.options.plugins.customMaxScore || 100;
+            
             const yGold = y.getPixelForValue(maxScore * 0.71);
             const ySilver = y.getPixelForValue(maxScore * 0.51);
             const yBronze = y.getPixelForValue(maxScore * 0.21);
             
             ctx.save();
-            ctx.fillStyle = 'rgba(241, 196, 15, 0.03)'; ctx.fillRect(left, top, right - left, yGold - top);
-            ctx.fillStyle = 'rgba(149, 165, 166, 0.03)'; ctx.fillRect(left, yGold, right - left, ySilver - yGold);
-            ctx.fillStyle = 'rgba(211, 84, 0, 0.03)'; ctx.fillRect(left, ySilver, right - left, yBronze - ySilver);
-            ctx.fillStyle = 'rgba(142, 68, 173, 0.03)'; ctx.fillRect(left, yBronze, right - left, bottom - yBronze);
+            
+            // 1. วาดพื้นหลัง (ปรับสีให้เข้มขึ้น สดใสขึ้น)
+            // สีทอง
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.15)'; 
+            ctx.fillRect(left, top, right - left, yGold - top);
+            
+            // สีเงิน
+            ctx.fillStyle = 'rgba(192, 192, 192, 0.15)'; 
+            ctx.fillRect(left, yGold, right - left, ySilver - yGold);
+            
+            // สีทองแดง
+            ctx.fillStyle = 'rgba(205, 127, 50, 0.15)'; 
+            ctx.fillRect(left, ySilver, right - left, yBronze - ySilver);
+            
+            // สีชมเชย (ม่วง)
+            ctx.fillStyle = 'rgba(155, 89, 182, 0.15)'; 
+            ctx.fillRect(left, yBronze, right - left, bottom - yBronze);
+
+            // 2. วาดข้อความกำกับ (Labels) เปลี่ยนเป็น "ช่วงคะแนน..."
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 12px Sarabun';
+            const xPos = right - 10;
+            
+            ctx.fillStyle = 'rgba(212, 172, 13, 0.8)'; // สีทองเข้มชัดเจน
+            ctx.fillText("🥇 ช่วงคะแนนเหรียญทอง", xPos, (top + yGold) / 2);
+            
+            ctx.fillStyle = 'rgba(127, 140, 141, 0.8)'; // สีเงินเข้มชัดเจน
+            ctx.fillText("🥈 ช่วงคะแนนเหรียญเงิน", xPos, (yGold + ySilver) / 2);
+            
+            ctx.fillStyle = 'rgba(211, 84, 0, 0.8)'; // สีทองแดงเข้มชัดเจน
+            ctx.fillText("🥉 ช่วงคะแนนเหรียญทองแดง", xPos, (ySilver + yBronze) / 2);
+            
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.8)'; // สีม่วงเข้มชัดเจน
+            ctx.fillText("🎖️ ช่วงคะแนนเหรียญชมเชย", xPos, (yBronze + bottom) / 2);
+
             ctx.restore();
-        }
-    };
-
-    // Plugin 3: อีโมจิและคะแนน (Medal Emojis) - ปรับปรุงใหม่!
-    const medalEmojiPlugin = {
-        id: 'medalEmojis',
-        afterDatasetsDraw: (chart) => {
-            const { ctx, chartArea: { width } } = chart;
-            const maxScore = chart.config.options.plugins.customMaxScore || 100;
-            
-            // 📱 ตรวจสอบว่าเป็นมือถือหรือไม่
-            const isSmallScreen = width < 500;
-            
-            // 📏 ปรับขนาดตามหน้าจอ
-            const emojiSize = isSmallScreen ? '18px' : '30px'; 
-            const fontSize = isSmallScreen ? '12px' : '16px'; 
-            const emojiOffset = isSmallScreen ? 15 : 25;
-            const textOffset = isSmallScreen ? 30 : 50;
-
-            chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
-                const score = chart.data.datasets[0].data[index];
-                const percent = (score / maxScore) * 100;
-                let emoji = "🎖️";
-                if (percent >= 71) emoji = "🥇"; else if (percent >= 51) emoji = "🥈"; else if (percent >= 21) emoji = "🥉";
-                
-                const x = datapoint.x; 
-                const y = datapoint.y;
-                
-                ctx.save();
-                ctx.textAlign = 'center'; 
-                ctx.textBaseline = 'middle';
-                
-                // วาด Emoji
-                ctx.font = `${emojiSize} Arial`; 
-                ctx.fillText(emoji, x, y - emojiOffset); 
-                
-                // วาดคะแนน (ใส่ขอบขาวให้อ่านง่ายขึ้น)
-                ctx.font = `bold ${fontSize} Sarabun`; 
-                ctx.fillStyle = '#2c3e50'; 
-                ctx.lineWidth = 3; 
-                ctx.strokeStyle = '#ffffff'; 
-                ctx.lineJoin = 'round';
-                
-                ctx.strokeText(score, x, y - textOffset); 
-                ctx.fillText(score, x, y - textOffset); 
-                
-                ctx.restore();
-            });
         }
     };
 
@@ -511,7 +496,7 @@
                     customMaxScore: currentMaxScore, targets: targets 
                 }
             },
-            plugins: [backgroundZonesPlugin, targetLinesPlugin, medalEmojiPlugin]
+            plugins: [backgroundZonesPlugin, targetLinesPlugin]
         });
 
         // อัปเดตตาราง
